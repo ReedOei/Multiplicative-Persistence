@@ -80,5 +80,3 @@ showMaxBy f (x:xs) = showMaxBy' (f x) xs
                 showMaxBy' cur ys
             where v = f y
 
-main = mapM_ print =<< persistence genCandidates
-
