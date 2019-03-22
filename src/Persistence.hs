@@ -13,23 +13,10 @@ pair [] = []
 pair [x] = []
 pair (a:b:xs) = (a,b) : pair (b : xs)
 
-digits = toBase 10
-
 toBase b n
     | n < b = [n]
     | otherwise = m : toBase b d
     where (d, m) = n `divMod` b
-
-base3 = map (head . toBase 3) primes
-
-frequency :: (Ord a, Foldable t, Num b) => t a -> Map a b
-frequency = foldl' (\m x -> Map.insertWith (+) x 1 m) Map.empty
-
-sequences :: Read a => IO [[a]]
-sequences = map (map read . filter (not . null) . tail . split ",") . drop 4 . lines <$> readFile "stripped"
-
-numberFrequencies :: IO [[(Integer, Integer)]]
-numberFrequencies = map (Map.toList . frequency) . concat . inits <$> sequences
 
 -- persistenceStep = product . digits
 
@@ -41,16 +28,28 @@ numberFrequencies = map (Map.toList . frequency) . concat . inits <$> sequences
 --     | x < 10 = 1
 --     | otherwise = 1 + persistence (product (digits x))
 
-fromDigits = foldl (\a b -> 10*a + b) 0
+fromDigits base = foldl (\a b -> base*a + b) 0
 
-concats _    0 = [[]]
-concats prev n = [ x:rest | x <- [prev..3] ++ if prev >= 7 then [prev..9] else [], rest <- concats (if x <= 5 then 7 else x) (n - 1) ]
-
-genCandidates = genCandidates' 233
+calcVals base = (highMin, max)
     where
-        genCandidates' n = map fromDigits (concats 1 n) ++ genCandidates' (n + 1)
+        max = base - 1
+        highMin = maximum $ filter (`notElem` products) [1..max]
+        products = [ a * b | a <- [2..max], b <- [2..max] ]
 
-persistence candidates = persistence' Map.empty candidates 0
+candidates _      _       _      _    0 = [[]]
+candidates curLow highMin maxDig prev n = do
+    x <- [prev..maxDig]
+    let newCurLow = if curLow <= maxDig then curLow * x else curLow
+    let newPrev = if curLow > maxDig then max highMin x else x
+    rest <- candidates newCurLow highMin maxDig newPrev (n - 1)
+    pure $ x:rest
+
+genCandidates base = genCandidates' 1
+    where
+        (highMin, maxDig) = calcVals base
+        genCandidates' n = map (fromDigits base) (candidates 1 highMin maxDig 1 n) ++ genCandidates' (n + 1)
+
+persistence base candidates = persistence' Map.empty candidates 0
     where
         persistence' known (x:xs) n
             | per > n = do
@@ -62,11 +61,11 @@ persistence candidates = persistence' Map.empty candidates 0
             where
                 (newKnown, per) = go known x
                 go vs x
-                    | x < 10 = (vs, 1)
+                    | x < 10 = (vs, 0)
                     | otherwise =
                         case Map.lookup x vs of
                             Just per -> (vs, per)
-                            Nothing -> let (final, per) = go vs $ product $ digits x
+                            Nothing -> let (final, per) = go vs $ product $ toBase base x
                                        in (Map.insert x (per + 1) final, per + 1)
 
 showMaxBy f (x:xs) = showMaxBy' (f x) xs
